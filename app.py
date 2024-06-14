@@ -2,6 +2,8 @@ import streamlit as st
 import calendar
 import pandas as pd
 from datetime import date, timedelta, datetime
+import requests
+import json
 
 # Function to determine the next specified weekday from a given date
 def next_weekday(d, weekday):
@@ -34,28 +36,28 @@ def display_calendar(year):
     st.markdown("\n\n".join(all_months), unsafe_allow_html=True)
 
 # Function to save a new post
-def save_post(platform, content, post_datetime, email, notes, hashtags):
-    st.session_state["scheduled_posts"].append({
-        "platform": platform,
-        "content": content,
-        "datetime": post_datetime,
-        "email": email,
-        "notes": notes,
-        "hashtags": hashtags
-    })
+def save_post(details):
+    st.session_state["scheduled_posts"].append(details)
     st.success("Post scheduled successfully!")
 
 # Function to update an existing post
-def update_post(index, platform, content, post_datetime, email, notes, hashtags):
-    st.session_state["scheduled_posts"][index] = {
-        "platform": platform,
-        "content": content,
-        "datetime": post_datetime,
-        "email": email,
-        "notes": notes,
-        "hashtags": hashtags
-    }
+def update_post(index, details):
+    st.session_state["scheduled_posts"][index] = details
     st.success("Post updated successfully!")
+
+# Function to generate a social media post using Ollama API
+def generate_post(prompt):
+    url = "http://localhost:11434/api/generate"
+    headers = {"Content-Type": "application/json"}
+    data = {"model": "llama3", "prompt": prompt}
+    
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+    
+    if response.status_code == 200:
+        return response.json().get("generated_text", "")
+    else:
+        st.error(f"Failed to generate post: {response.text}")
+        return ""
 
 def main():
     st.title("GalvanMoto Calendar and Social Media Scheduler")
@@ -72,22 +74,52 @@ def main():
 
     selected_platform = st.selectbox("Select Social Media Platform", social_platforms)
     selected_weekday = st.selectbox("Select Day of the Week", weekdays)
-    post_content = st.text_area("Write your social media post content here")
+    post_content = st.text_area("Write your social media post content here or generate a post using Ollama")
     post_time = st.time_input("Select time for the post")
-    hashtags = st.text_input("Enter hashtags (comma-separated)")
-    notes = st.text_area("Add notes for this post")
-    email = st.text_input("Enter your email for notifications")
+    link = st.text_input("Enter link for the post")
+    image_url = st.text_input("Enter image URL for the post")
+    video_url = st.text_input("Enter video URL for the post")
+    post_month = st.number_input("Enter Month (1-12)", min_value=1, max_value=12, step=1)
+    post_day = st.number_input("Enter Day (1-31)", min_value=1, max_value=31, step=1)
+    post_year = st.number_input("Enter Year", min_value=1900, max_value=2100, step=1, value=date.today().year)
+    post_hour = st.number_input("Enter Hour (1-24)", min_value=1, max_value=24, step=1)
+    post_minute = st.number_input("Enter Minute (0-59)", min_value=0, max_value=59, step=1)
+    pin_title = st.text_input("Enter Pin Title")
+    category = st.text_input("Enter Category")
+    watermark = st.text_input("Enter Watermark")
+    hashtag_group = st.text_input("Enter Hashtag Group (comma-separated)")
+    video_thumbnail_url = st.text_input("Enter Video Thumbnail URL")
+    cta_group = st.text_input("Enter CTA Group")
 
-    today = date.today()
-    next_post_day = next_weekday(today, weekdays.index(selected_weekday))
-    post_datetime = datetime.combine(next_post_day, post_time)
-    st.write(f"Your next scheduled post will be on: {post_datetime}")
+    post_datetime = datetime(post_year, post_month, post_day, post_hour, post_minute)
+
+    post_details = {
+        "platform": selected_platform,
+        "content": post_content,
+        "datetime": post_datetime,
+        "link": link,
+        "image_url": image_url,
+        "video_url": video_url,
+        "pin_title": pin_title,
+        "category": category,
+        "watermark": watermark,
+        "hashtag_group": hashtag_group,
+        "video_thumbnail_url": video_thumbnail_url,
+        "cta_group": cta_group
+    }
 
     if "scheduled_posts" not in st.session_state:
         st.session_state["scheduled_posts"] = []
 
+    if st.button("Generate Post with Ollama"):
+        prompt = st.text_area("Enter prompt for post generation")
+        if prompt:
+            generated_post = generate_post(prompt)
+            st.session_state["generated_post"] = generated_post
+            st.write(generated_post)
+
     if st.button("Save Post"):
-        save_post(selected_platform, post_content, post_datetime, email, notes, hashtags)
+        save_post(post_details)
 
     if st.session_state["scheduled_posts"]:
         st.subheader("Scheduled Posts")
@@ -95,24 +127,59 @@ def main():
             st.write(f"**Platform:** {post['platform']}")
             st.write(f"**Date and Time:** {post['datetime']}")
             st.write(f"**Content:**\n{post['content']}")
-            st.write(f"**Notes:**\n{post['notes']}")
-            st.write(f"**Hashtags:**\n{post['hashtags']}")
+            st.write(f"**Link:** {post['link']}")
+            st.write(f"**Image URL:** {post['image_url']}")
+            st.write(f"**Video URL:** {post['video_url']}")
+            st.write(f"**Pin Title:** {post['pin_title']}")
+            st.write(f"**Category:** {post['category']}")
+            st.write(f"**Watermark:** {post['watermark']}")
+            st.write(f"**Hashtag Group:** {post['hashtag_group']}")
+            st.write(f"**Video Thumbnail URL:** {post['video_thumbnail_url']}")
+            st.write(f"**CTA Group:** {post['cta_group']}")
             if st.button(f"Edit Post {i + 1}"):
                 st.session_state["edit_mode"] = i
 
         if "edit_mode" in st.session_state:
             edit_index = st.session_state["edit_mode"]
-            edited_platform = st.selectbox("Edit Social Media Platform", social_platforms, index=social_platforms.index(st.session_state["scheduled_posts"][edit_index]["platform"]))
-            edited_weekday = st.selectbox("Edit Day of the Week", weekdays, index=weekdays.index(st.session_state["scheduled_posts"][edit_index]["datetime"].strftime('%A')))
-            edited_content = st.text_area("Edit your social media post content here", st.session_state["scheduled_posts"][edit_index]["content"])
-            edited_time = st.time_input("Edit time for the post", st.session_state["scheduled_posts"][edit_index]["datetime"].time())
-            edited_hashtags = st.text_input("Edit hashtags (comma-separated)", st.session_state["scheduled_posts"][edit_index]["hashtags"])
-            edited_notes = st.text_area("Edit your notes for this post", st.session_state["scheduled_posts"][edit_index]["notes"])
-            edited_email = st.text_input("Edit your email for notifications", st.session_state["scheduled_posts"][edit_index]["email"])
+            post = st.session_state["scheduled_posts"][edit_index]
+            edited_platform = st.selectbox("Edit Social Media Platform", social_platforms, index=social_platforms.index(post["platform"]))
+            edited_weekday = st.selectbox("Edit Day of the Week", weekdays, index=weekdays.index(post["datetime"].strftime('%A')))
+            edited_content = st.text_area("Edit your social media post content here", post["content"])
+            edited_time = st.time_input("Edit time for the post", post["datetime"].time())
+            edited_link = st.text_input("Edit link for the post", post["link"])
+            edited_image_url = st.text_input("Edit image URL for the post", post["image_url"])
+            edited_video_url = st.text_input("Edit video URL for the post", post["video_url"])
+            edited_month = st.number_input("Edit Month (1-12)", min_value=1, max_value=12, step=1, value=post["datetime"].month)
+            edited_day = st.number_input("Edit Day (1-31)", min_value=1, max_value=31, step=1, value=post["datetime"].day)
+            edited_year = st.number_input("Edit Year", min_value=1900, max_value=2100, step=1, value=post["datetime"].year)
+            edited_hour = st.number_input("Edit Hour (1-24)", min_value=1, max_value=24, step=1, value=post["datetime"].hour)
+            edited_minute = st.number_input("Edit Minute (0-59)", min_value=0, max_value=59, step=1, value=post["datetime"].minute)
+            edited_pin_title = st.text_input("Edit Pin Title", post["pin_title"])
+            edited_category = st.text_input("Edit Category", post["category"])
+            edited_watermark = st.text_input("Edit Watermark", post["watermark"])
+            edited_hashtag_group = st.text_input("Edit Hashtag Group (comma-separated)", post["hashtag_group"])
+            edited_video_thumbnail_url = st.text_input("Edit Video Thumbnail URL", post["video_thumbnail_url"])
+            edited_cta_group = st.text_input("Edit CTA Group", post["cta_group"])
+
+            edited_datetime = datetime(edited_year, edited_month, edited_day, edited_hour, edited_minute)
+
+            edited_post_details = {
+                "platform": edited_platform,
+                "content": edited_content,
+                "datetime": edited_datetime,
+                "link": edited_link,
+                "image_url": edited_image_url,
+                "video_url": edited_video_url,
+                "pin_title": edited_pin_title,
+                "category": edited_category,
+                "watermark": edited_watermark,
+                "hashtag_group": edited_hashtag_group,
+                "video_thumbnail_url": edited_video_thumbnail_url,
+                "cta_group": edited_cta_group
+            }
+
             if st.button("Update Post"):
-                edited_date = next_weekday(today, weekdays.index(edited_weekday))
-                edited_datetime = datetime.combine(edited_date, edited_time)
-                update_post(edit_index, edited_platform, edited_content, edited_datetime, edited_email, edited_notes, edited_hashtags)
+                update_post(edit_index, edited_post_details)
                 del st.session_state["edit_mode"]
 
     if st.session_state["scheduled_posts"] and st.button("Export to CSV"):
@@ -132,14 +199,21 @@ def main():
     if uploaded_file is not None:
         imported_posts = pd.read_csv(uploaded_file)
         for _, row in imported_posts.iterrows():
-            st.session_state["scheduled_posts"].append({
+            post_details = {
                 "platform": row["platform"],
                 "content": row["content"],
                 "datetime": datetime.strptime(row["datetime"], '%Y-%m-%d %H:%M:%S'),
-                "email": row["email"],
-                "notes": row["notes"],
-                "hashtags": row["hashtags"]
-            })
+                "link": row["link"],
+                "image_url": row["image_url"],
+                "video_url": row["video_url"],
+                "pin_title": row["pin_title"],
+                "category": row["category"],
+                "watermark": row["watermark"],
+                "hashtag_group": row["hashtag_group"],
+                "video_thumbnail_url": row["video_thumbnail_url"],
+                "cta_group": row["cta_group"]
+            }
+            st.session_state["scheduled_posts"].append(post_details)
         st.success("Posts imported successfully!")
 
 if __name__ == "__main__":
