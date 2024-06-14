@@ -12,28 +12,36 @@ def next_weekday(d, weekday):
         days_ahead += 7
     return d + timedelta(days_ahead)
 
-# Function to display the calendar
+# Function to display the calendar and allow date selection
 def display_calendar(year):
     cal = calendar.Calendar(calendar.SUNDAY)
-    all_months = []
+    month_names = list(calendar.month_name)
+    selected_date = st.session_state.get("selected_date", date.today())
 
     for month in range(1, 13):
         month_cal = cal.monthdayscalendar(year, month)
-        month_name = calendar.month_name[month]
+        month_name = month_names[month]
+        st.subheader(f"{month_name} {year}")
 
-        month_title = f"### {month_name} {year}"
-        days_header = "|".join(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
-        separator = "|".join(["---"] * 7)
-        header_row = f"|{days_header}|\n|{separator}|"
+        days_header = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        st.write(f"{'  '.join(days_header)}")
 
-        month_table = month_title + "\n" + header_row + "\n"
         for week in month_cal:
-            week_str = "|".join(f"{day:2}" if day != 0 else "  " for day in week)
-            month_table += f"|{week_str}|\n"
-
-        all_months.append(month_table)
-
-    st.markdown("\n\n".join(all_months), unsafe_allow_html=True)
+            week_str = ""
+            for day in week:
+                if day == 0:
+                    week_str += "    "
+                else:
+                    day_date = date(year, month, day)
+                    if day_date == selected_date:
+                        week_str += f"[**{day:2}**] "
+                    else:
+                        if st.button(f"{day:2}", key=f"{year}-{month}-{day}"):
+                            st.session_state["selected_date"] = day_date
+                            selected_date = day_date
+                            st.experimental_rerun()
+                    week_str += f"{day:2}  "
+            st.write(week_str)
 
 # Function to save a new post
 def save_post(details):
@@ -66,6 +74,9 @@ def main():
     year = st.number_input("Enter a year", min_value=0, max_value=9999, value=date.today().year)
     display_calendar(year)
 
+    selected_date = st.session_state.get("selected_date", date.today())
+    st.write(f"Selected Date: {selected_date.strftime('%Y-%m-%d')}")
+
     # Social Media Scheduler Section
     st.subheader("Social Media Scheduler")
 
@@ -79,11 +90,6 @@ def main():
     link = st.text_input("Enter link for the post")
     image_url = st.text_input("Enter image URL for the post")
     video_url = st.text_input("Enter video URL for the post")
-    post_month = st.number_input("Enter Month (1-12)", min_value=1, max_value=12, step=1)
-    post_day = st.number_input("Enter Day (1-31)", min_value=1, max_value=31, step=1)
-    post_year = st.number_input("Enter Year", min_value=1900, max_value=2100, step=1, value=date.today().year)
-    post_hour = st.number_input("Enter Hour (1-24)", min_value=1, max_value=24, step=1)
-    post_minute = st.number_input("Enter Minute (0-59)", min_value=0, max_value=59, step=1)
     pin_title = st.text_input("Enter Pin Title")
     category = st.text_input("Enter Category")
     watermark = st.text_input("Enter Watermark")
@@ -91,7 +97,7 @@ def main():
     video_thumbnail_url = st.text_input("Enter Video Thumbnail URL")
     cta_group = st.text_input("Enter CTA Group")
 
-    post_datetime = datetime(post_year, post_month, post_day, post_hour, post_minute)
+    post_datetime = datetime.combine(selected_date, post_time)
 
     post_details = {
         "platform": selected_platform,
@@ -124,20 +130,21 @@ def main():
     if st.session_state["scheduled_posts"]:
         st.subheader("Scheduled Posts")
         for i, post in enumerate(st.session_state["scheduled_posts"]):
-            st.write(f"**Platform:** {post['platform']}")
-            st.write(f"**Date and Time:** {post['datetime']}")
-            st.write(f"**Content:**\n{post['content']}")
-            st.write(f"**Link:** {post['link']}")
-            st.write(f"**Image URL:** {post['image_url']}")
-            st.write(f"**Video URL:** {post['video_url']}")
-            st.write(f"**Pin Title:** {post['pin_title']}")
-            st.write(f"**Category:** {post['category']}")
-            st.write(f"**Watermark:** {post['watermark']}")
-            st.write(f"**Hashtag Group:** {post['hashtag_group']}")
-            st.write(f"**Video Thumbnail URL:** {post['video_thumbnail_url']}")
-            st.write(f"**CTA Group:** {post['cta_group']}")
-            if st.button(f"Edit Post {i + 1}"):
-                st.session_state["edit_mode"] = i
+            if post["datetime"].date() == selected_date:
+                st.write(f"**Platform:** {post['platform']}")
+                st.write(f"**Date and Time:** {post['datetime']}")
+                st.write(f"**Content:**\n{post['content']}")
+                st.write(f"**Link:** {post['link']}")
+                st.write(f"**Image URL:** {post['image_url']}")
+                st.write(f"**Video URL:** {post['video_url']}")
+                st.write(f"**Pin Title:** {post['pin_title']}")
+                st.write(f"**Category:** {post['category']}")
+                st.write(f"**Watermark:** {post['watermark']}")
+                st.write(f"**Hashtag Group:** {post['hashtag_group']}")
+                st.write(f"**Video Thumbnail URL:** {post['video_thumbnail_url']}")
+                st.write(f"**CTA Group:** {post['cta_group']}")
+                if st.button(f"Edit Post {i + 1}"):
+                    st.session_state["edit_mode"] = i
 
         if "edit_mode" in st.session_state:
             edit_index = st.session_state["edit_mode"]
@@ -149,11 +156,6 @@ def main():
             edited_link = st.text_input("Edit link for the post", post["link"])
             edited_image_url = st.text_input("Edit image URL for the post", post["image_url"])
             edited_video_url = st.text_input("Edit video URL for the post", post["video_url"])
-            edited_month = st.number_input("Edit Month (1-12)", min_value=1, max_value=12, step=1, value=post["datetime"].month)
-            edited_day = st.number_input("Edit Day (1-31)", min_value=1, max_value=31, step=1, value=post["datetime"].day)
-            edited_year = st.number_input("Edit Year", min_value=1900, max_value=2100, step=1, value=post["datetime"].year)
-            edited_hour = st.number_input("Edit Hour (1-24)", min_value=1, max_value=24, step=1, value=post["datetime"].hour)
-            edited_minute = st.number_input("Edit Minute (0-59)", min_value=0, max_value=59, step=1, value=post["datetime"].minute)
             edited_pin_title = st.text_input("Edit Pin Title", post["pin_title"])
             edited_category = st.text_input("Edit Category", post["category"])
             edited_watermark = st.text_input("Edit Watermark", post["watermark"])
@@ -161,7 +163,7 @@ def main():
             edited_video_thumbnail_url = st.text_input("Edit Video Thumbnail URL", post["video_thumbnail_url"])
             edited_cta_group = st.text_input("Edit CTA Group", post["cta_group"])
 
-            edited_datetime = datetime(edited_year, edited_month, edited_day, edited_hour, edited_minute)
+            edited_datetime = datetime.combine(selected_date, edited_time)
 
             edited_post_details = {
                 "platform": edited_platform,
